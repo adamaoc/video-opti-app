@@ -1,0 +1,38 @@
+.header {
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+
+.header__brand {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.header__name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.header__tagline {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.header__settings {
+  color: var(--text-secondary);
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+}
+
+.header__settings:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}

@@ -1,0 +1,81 @@
+.presets__label {
+  margin: 0 0 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.presets__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.presets__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  cursor: pointer;
+}
+
+.presets__item:hover {
+  background: var(--bg-tertiary);
+}
+
+.presets__item--active {
+  border-left: 3px solid var(--accent-gold);
+  padding-left: 10px;
+}
+
+.presets__item input {
+  margin-top: 3px;
+  accent-color: var(--accent-gold);
+}
+
+.presets__item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.presets__item-label {
+  font-weight: 500;
+}
+
+.presets__item-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.presets__custom {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.presets__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.presets__field select,
+.presets__field input[type='range'] {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+}
+
+.presets__field select:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
