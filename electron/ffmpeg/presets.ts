@@ -52,20 +52,18 @@ export const PRESETS: Preset[] = [
 export function resolvePreset(
   presetId: PresetId,
   custom?: CustomOptions,
-): { maxHeight: number; crf: number; suffix: string } {
+): { maxHeight: number; crf: number } {
   const preset = PRESETS.find(p => p.id === presetId) ?? PRESETS[0]
 
   if (presetId === 'custom' && custom) {
     return {
       maxHeight: custom.maxHeight,
       crf: custom.crf,
-      suffix: '_optimized',
     }
   }
 
   return {
     maxHeight: preset.maxHeight,
     crf: preset.crf,
-    suffix: preset.suffix,
   }
 }

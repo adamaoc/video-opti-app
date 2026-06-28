@@ -2,6 +2,12 @@ import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import path from 'node:path'
 import { probeVideo } from '../ffmpeg/probe'
 import { cancelEncode, encodeVideo } from '../ffmpeg/encode'
+import {
+  buildOutputBasename,
+  ensureOutputDir,
+  hasMultipleSourceDirs,
+  resolveOutputDir,
+} from '../ffmpeg/output'
 import type { CustomOptions, PresetId } from '../ffmpeg/presets'
 import { logger, type LogEntry } from '../logger'
 import { settingsStore, type AppSettings } from '../store'
@@ -80,13 +86,20 @@ export function registerIpcHandlers(): void {
     files: Array<{ path: string; duration: number; size: number }>
     presetId: PresetId
     outputDir?: string | null
+    useSequenceSuffix?: boolean
     custom?: CustomOptions
   }) => {
     if (encoding) throw new Error('An encoding job is already running')
 
+    const manualOutputDir = payload.outputDir ?? settingsStore.get('outputDir')
+    const useSequenceSuffix = payload.useSequenceSuffix ?? settingsStore.get('useSequenceSuffix')
+
+    if (hasMultipleSourceDirs(payload.files.map(f => f.path)) && !manualOutputDir) {
+      throw new Error('Videos are from different folders. Choose one output folder before encoding.')
+    }
+
     logger.info('encode', `Batch started — ${payload.files.length} file(s), preset: ${payload.presetId}`)
     encoding = true
-    const outputDir = payload.outputDir ?? settingsStore.get('outputDir')
     const results: Array<{
       inputPath: string
       ok: boolean
@@ -97,7 +110,12 @@ export function registerIpcHandlers(): void {
     }> = []
 
     try {
-      for (const file of payload.files) {
+      for (let index = 0; index < payload.files.length; index++) {
+        const file = payload.files[index]
+        const outputDir = resolveOutputDir(file.path, manualOutputDir)
+        const outputBasename = buildOutputBasename(file.path, index, useSequenceSuffix)
+
+        await ensureOutputDir(outputDir)
         event.sender.send('encode:file-start', { inputPath: file.path })
 
         try {
@@ -105,7 +123,8 @@ export function registerIpcHandlers(): void {
             {
               inputPath: file.path,
               presetId: payload.presetId,
-              outputDir: outputDir ?? undefined,
+              outputDir,
+              outputBasename,
               custom: payload.custom,
             },
             file.duration,
@@ -145,10 +164,15 @@ export function registerIpcHandlers(): void {
     const failCount = results.length - okCount
     logger.info('encode', `Batch complete — ${okCount} succeeded, ${failCount} failed, saved ${savedBytes} bytes`)
 
+    const firstFile = payload.files[0]
+    const resolvedOutputDir = firstFile
+      ? resolveOutputDir(firstFile.path, manualOutputDir)
+      : ''
+
     event.sender.send('encode:complete', {
       results,
       savedBytes,
-      outputDir: outputDir ?? path.dirname(payload.files[0]?.path ?? ''),
+      outputDir: resolvedOutputDir,
     })
 
     return results

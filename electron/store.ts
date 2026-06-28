@@ -4,6 +4,7 @@ import type { PresetId } from './ffmpeg/presets'
 export interface AppSettings {
   defaultPreset: PresetId
   outputDir: string | null
+  useSequenceSuffix: boolean
   customMaxHeight: number
   customCrf: number
 }
@@ -11,6 +12,7 @@ export interface AppSettings {
 const defaults: AppSettings = {
   defaultPreset: 'quick-share',
   outputDir: null,
+  useSequenceSuffix: false,
   customMaxHeight: 1080,
   customCrf: 23,
 }

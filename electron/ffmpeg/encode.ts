@@ -9,7 +9,8 @@ import { resolvePreset, type CustomOptions, type PresetId } from './presets'
 export interface EncodeJob {
   inputPath: string
   presetId: PresetId
-  outputDir?: string
+  outputDir: string
+  outputBasename: string
   custom?: CustomOptions
 }
 
@@ -35,14 +36,8 @@ export function cancelEncode(): void {
   }
 }
 
-function buildOutputPath(
-  inputPath: string,
-  suffix: string,
-  outputDir?: string,
-): string {
-  const parsed = path.parse(inputPath)
-  const dir = outputDir ?? parsed.dir
-  return path.join(dir, `${parsed.name}${suffix}.mp4`)
+function buildOutputPath(outputDir: string, outputBasename: string): string {
+  return path.join(outputDir, `${outputBasename}.mp4`)
 }
 
 function parseTimeToSeconds(time: string): number {
@@ -58,8 +53,8 @@ export function encodeVideo(
   duration: number,
   onProgress: (progress: EncodeProgress) => void,
 ): Promise<EncodeResult> {
-  const { maxHeight, crf, suffix } = resolvePreset(job.presetId, job.custom)
-  const outputPath = buildOutputPath(job.inputPath, suffix, job.outputDir)
+  const { maxHeight, crf } = resolvePreset(job.presetId, job.custom)
+  const outputPath = buildOutputPath(job.outputDir, job.outputBasename)
   const scaleFilter = buildScaleFilter(maxHeight)
   const ffmpegPath = getFfmpegPath()
 

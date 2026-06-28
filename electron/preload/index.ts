@@ -72,6 +72,7 @@ const api = {
     files: EncodeFileInput[]
     presetId: PresetId
     outputDir?: string | null
+    useSequenceSuffix?: boolean
     custom?: CustomOptions
   }): Promise<EncodeFileResult[]> =>
     ipcRenderer.invoke('encode:start', payload),

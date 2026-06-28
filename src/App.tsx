@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PresetId } from '@/constants/presets'
 import type { QueueItem } from '@/types/queue'
 import type { EncodeCompleteEvent, EncodeFileResult, LogEntry } from '@/types/vidopti'
 import { formatBytes } from '@/utils/format'
+import {
+  buildOutputPreviewName,
+  describeOutputFolder,
+  hasMultipleSourceDirs,
+} from '@/utils/output'
+import { computeBatchProgress } from '@/utils/progress'
 import { Header } from '@/components/Header'
 import { DropZone } from '@/components/DropZone'
 import { QueueList } from '@/components/QueueList'
@@ -21,12 +27,23 @@ export default function App() {
   const [customMaxHeight, setCustomMaxHeight] = useState(1080)
   const [customCrf, setCustomCrf] = useState(23)
   const [outputDir, setOutputDir] = useState<string | null>(null)
+  const [useSequenceSuffix, setUseSequenceSuffix] = useState(false)
   const [encoding, setEncoding] = useState(false)
   const [overallProgress, setOverallProgress] = useState(0)
   const [statusText, setStatusText] = useState('')
   const [lastOutputPath, setLastOutputPath] = useState<string | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [logsOpen, setLogsOpen] = useState(false)
+  const batchPathsRef = useRef<string[]>([])
+
+  const queuePaths = queue.map(q => q.path)
+  const multiSource = hasMultipleSourceDirs(queuePaths)
+  const requiresOutputDir = multiSource && !outputDir
+  const outputInfo = describeOutputFolder(queuePaths, outputDir)
+
+  const previewNames = queue.map((item, index) =>
+    buildOutputPreviewName(item.name, index, useSequenceSuffix),
+  )
 
   useEffect(() => {
     window.vidopti.getLogs().then(setLogs)
@@ -40,37 +57,41 @@ export default function App() {
     window.vidopti.getSettings().then(settings => {
       setPresetId(settings.defaultPreset)
       setOutputDir(settings.outputDir)
+      setUseSequenceSuffix(settings.useSequenceSuffix)
       setCustomMaxHeight(settings.customMaxHeight)
       setCustomCrf(settings.customCrf)
     })
   }, [])
 
   const addPaths = useCallback(async (paths: string[]) => {
-    const existing = new Set(queue.map(q => q.path))
-    const unique = paths.filter(p => !existing.has(p))
-    if (!unique.length) return
-
     setStatusText('Reading file info…')
-    const results = await window.vidopti.probeMany(unique)
+    const results = await window.vidopti.probeMany(paths)
 
-    const newItems: QueueItem[] = results
-      .filter(r => r.ok && r.data)
-      .map(r => ({
-        id: makeId(),
-        path: r.data!.path,
-        name: r.data!.name,
-        size: r.data!.size,
-        duration: r.data!.duration,
-        width: r.data!.width,
-        height: r.data!.height,
-        codec: r.data!.codec,
-        status: 'pending' as const,
-        progress: 0,
-      }))
+    let added = 0
+    setQueue(prev => {
+      const existing = new Set(prev.map(q => q.path))
+      const newItems: QueueItem[] = results
+        .filter(r => r.ok && r.data && !existing.has(r.data.path))
+        .map(r => ({
+          id: makeId(),
+          path: r.data!.path,
+          name: r.data!.name,
+          size: r.data!.size,
+          duration: r.data!.duration,
+          width: r.data!.width,
+          height: r.data!.height,
+          codec: r.data!.codec,
+          status: 'pending' as const,
+          progress: 0,
+        }))
 
-    setQueue(prev => [...prev, ...newItems])
-    setStatusText(newItems.length ? `${newItems.length} file(s) added` : 'Could not read selected files')
-  }, [queue])
+      added = newItems.length
+      if (!newItems.length) return prev
+      return [...prev, ...newItems]
+    })
+
+    setStatusText(added ? `${added} file(s) added` : 'No new files added')
+  }, [])
 
   const handleBrowse = useCallback(async () => {
     const paths = await window.vidopti.openFiles()
@@ -92,6 +113,11 @@ export default function App() {
     window.vidopti.setSettings({ customMaxHeight: maxHeight, customCrf: crf })
   }, [])
 
+  const handleSequenceSuffixChange = useCallback((value: boolean) => {
+    setUseSequenceSuffix(value)
+    window.vidopti.setSettings({ useSequenceSuffix: value })
+  }, [])
+
   const handlePickOutputDir = useCallback(async () => {
     const dir = await window.vidopti.openOutputDir()
     if (dir) {
@@ -106,8 +132,15 @@ export default function App() {
   }, [])
 
   const handleStart = useCallback(async () => {
+    if (requiresOutputDir) {
+      setStatusText('Choose an output folder — videos are from different locations.')
+      return
+    }
+
     const pending = queue.filter(q => q.status === 'pending' || q.status === 'error')
     if (!pending.length) return
+
+    batchPathsRef.current = pending.map(p => p.path)
 
     setEncoding(true)
     setOverallProgress(0)
@@ -115,39 +148,55 @@ export default function App() {
     setLastOutputPath(null)
 
     const unsubProgress = window.vidopti.onEncodeProgress(({ inputPath, percent }) => {
-      setQueue(prev => prev.map(item =>
-        item.path === inputPath
-          ? { ...item, status: 'processing', progress: percent }
-          : item,
-      ))
-      const done = queue.filter(q => q.status === 'done').length
-      const total = queue.length
-      setOverallProgress(((done + percent / 100) / total) * 100)
+      setQueue(prev => {
+        const current = prev.find(item => item.path === inputPath)
+        if (!current || current.status === 'done' || current.status === 'error') return prev
+
+        const updated = prev.map(item =>
+          item.path === inputPath
+            ? { ...item, status: 'processing' as const, progress: percent }
+            : item,
+        )
+        setOverallProgress(computeBatchProgress(updated, batchPathsRef.current))
+        return updated
+      })
     })
 
     const unsubStart = window.vidopti.onEncodeFileStart(({ inputPath }) => {
-      setQueue(prev => prev.map(item =>
-        item.path === inputPath ? { ...item, status: 'processing', progress: 0 } : item,
-      ))
-      const name = queue.find(q => q.path === inputPath)?.name ?? 'file'
+      setQueue(prev => {
+        const updated = prev.map(item =>
+          item.path === inputPath ? { ...item, status: 'processing' as const, progress: 0 } : item,
+        )
+        setOverallProgress(computeBatchProgress(updated, batchPathsRef.current))
+        return updated
+      })
+      const name = pending.find(q => q.path === inputPath)?.name ?? 'file'
       setStatusText(`Encoding ${name}…`)
     })
 
     const unsubDone = window.vidopti.onEncodeFileDone(({ inputPath, outputPath, outputSize }) => {
-      setQueue(prev => prev.map(item =>
-        item.path === inputPath
-          ? { ...item, status: 'done', progress: 100, outputPath, outputSize }
-          : item,
-      ))
+      setQueue(prev => {
+        const updated = prev.map(item =>
+          item.path === inputPath
+            ? { ...item, status: 'done' as const, progress: 100, outputPath, outputSize }
+            : item,
+        )
+        setOverallProgress(computeBatchProgress(updated, batchPathsRef.current))
+        return updated
+      })
       setLastOutputPath(outputPath)
     })
 
     const unsubError = window.vidopti.onEncodeFileError(({ inputPath, error }) => {
-      setQueue(prev => prev.map(item =>
-        item.path === inputPath ? { ...item, status: 'error', error } : item,
-      ))
+      setQueue(prev => {
+        const updated = prev.map(item =>
+          item.path === inputPath ? { ...item, status: 'error' as const, error } : item,
+        )
+        setOverallProgress(computeBatchProgress(updated, batchPathsRef.current))
+        return updated
+      })
       setLogsOpen(true)
-      const name = queue.find(q => q.path === inputPath)?.name ?? 'file'
+      const name = pending.find(q => q.path === inputPath)?.name ?? 'file'
       setStatusText(`Failed — ${name}`)
     })
 
@@ -172,6 +221,7 @@ export default function App() {
 
       setOverallProgress(100)
       setEncoding(false)
+      batchPathsRef.current = []
     })
 
     try {
@@ -179,11 +229,13 @@ export default function App() {
         files: pending.map(p => ({ path: p.path, duration: p.duration, size: p.size })),
         presetId,
         outputDir,
+        useSequenceSuffix,
         custom: presetId === 'custom' ? { maxHeight: customMaxHeight, crf: customCrf } : undefined,
       })
     } catch (err) {
       setStatusText((err as Error).message)
       setEncoding(false)
+      batchPathsRef.current = []
     } finally {
       unsubProgress()
       unsubStart()
@@ -191,12 +243,14 @@ export default function App() {
       unsubError()
       unsubComplete()
     }
-  }, [queue, presetId, outputDir, customMaxHeight, customCrf])
+  }, [queue, presetId, outputDir, useSequenceSuffix, customMaxHeight, customCrf, requiresOutputDir])
 
   const handleCancel = useCallback(async () => {
     await window.vidopti.cancelEncode()
     setEncoding(false)
     setStatusText('Cancelled')
+    batchPathsRef.current = []
+    setOverallProgress(0)
     setQueue(prev => prev.map(item =>
       item.status === 'processing' ? { ...item, status: 'pending', progress: 0 } : item,
     ))
@@ -209,6 +263,7 @@ export default function App() {
   const showFooter = encoding || statusText.length > 0
   const hasOutput = queue.some(q => q.status === 'done')
   const logErrorCount = logs.filter(l => l.level === 'error').length
+  const canStart = !requiresOutputDir && queue.some(q => q.status === 'pending' || q.status === 'error')
 
   const handleClearLogs = useCallback(async () => {
     await window.vidopti.clearLogs()
@@ -236,7 +291,11 @@ export default function App() {
           customMaxHeight={customMaxHeight}
           customCrf={customCrf}
           onCustomChange={handleCustomChange}
-          outputDir={outputDir}
+          outputLabel={outputInfo.label}
+          outputWarning={outputInfo.warning}
+          useSequenceSuffix={useSequenceSuffix}
+          onSequenceSuffixChange={handleSequenceSuffixChange}
+          previewNames={previewNames}
           onPickOutputDir={handlePickOutputDir}
           onClearOutputDir={handleClearOutputDir}
           onAddFiles={handleBrowse}
@@ -244,8 +303,9 @@ export default function App() {
           onCancel={handleCancel}
           onReveal={handleReveal}
           encoding={encoding}
-          canStart={queue.some(q => q.status === 'pending' || q.status === 'error')}
+          canStart={canStart}
           hasOutput={hasOutput}
+          hasManualOutputDir={!!outputDir}
         />
       </div>
       {showFooter && (

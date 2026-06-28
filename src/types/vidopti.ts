@@ -3,6 +3,7 @@ import type { PresetId } from '@/constants/presets'
 export interface AppSettings {
   defaultPreset: PresetId
   outputDir: string | null
+  useSequenceSuffix: boolean
   customMaxHeight: number
   customCrf: number
 }
@@ -77,6 +78,7 @@ export interface VidOptiApi {
     files: EncodeFileInput[]
     presetId: PresetId
     outputDir?: string | null
+    useSequenceSuffix?: boolean
     custom?: CustomOptions
   }) => Promise<EncodeFileResult[]>
   cancelEncode: () => Promise<void>
