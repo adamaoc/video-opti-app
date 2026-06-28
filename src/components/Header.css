@@ -26,13 +26,33 @@
   font-size: 12px;
 }
 
-.header__settings {
+.header__logs {
   color: var(--text-secondary);
-  padding: 6px 10px;
+  padding: 6px 12px;
   border: 1px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.header__settings:hover {
+.header__logs:hover {
   color: var(--text-primary);
   border-color: var(--text-muted);
+}
+
+.header__logs--active {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.header__badge {
+  background: var(--error);
+  color: #fff;
+  font-size: 10px;
+  padding: 1px 5px;
+  min-width: 16px;
+  text-align: center;
 }

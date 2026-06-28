@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PresetId } from '@/constants/presets'
 import type { QueueItem } from '@/types/queue'
-import type { EncodeCompleteEvent, EncodeFileResult } from '@/types/vidopti'
+import type { EncodeCompleteEvent, EncodeFileResult, LogEntry } from '@/types/vidopti'
 import { formatBytes } from '@/utils/format'
 import { Header } from '@/components/Header'
 import { DropZone } from '@/components/DropZone'
 import { QueueList } from '@/components/QueueList'
 import { Sidebar } from '@/components/Sidebar'
 import { ProgressBar } from '@/components/ProgressBar'
+import { LogPanel } from '@/components/LogPanel'
 import './App.css'
 
 function makeId(): string {
@@ -24,6 +25,16 @@ export default function App() {
   const [overallProgress, setOverallProgress] = useState(0)
   const [statusText, setStatusText] = useState('')
   const [lastOutputPath, setLastOutputPath] = useState<string | null>(null)
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [logsOpen, setLogsOpen] = useState(false)
+
+  useEffect(() => {
+    window.vidopti.getLogs().then(setLogs)
+    const unsub = window.vidopti.onLogEntry(entry => {
+      setLogs(prev => [...prev.slice(-499), entry])
+    })
+    return unsub
+  }, [])
 
   useEffect(() => {
     window.vidopti.getSettings().then(settings => {
@@ -135,16 +146,30 @@ export default function App() {
       setQueue(prev => prev.map(item =>
         item.path === inputPath ? { ...item, status: 'error', error } : item,
       ))
+      setLogsOpen(true)
+      const name = queue.find(q => q.path === inputPath)?.name ?? 'file'
+      setStatusText(`Failed — ${name}`)
     })
 
     const unsubComplete = window.vidopti.onEncodeComplete(({ results, savedBytes }: EncodeCompleteEvent) => {
       const ok = results.filter((r: EncodeFileResult) => r.ok).length
+      const failed = results.length - ok
       const saved = results.reduce((sum: number, r: EncodeFileResult) => {
         const item = queue.find(q => q.path === r.inputPath)
         if (r.ok && r.outputSize && item) return sum + (item.size - r.outputSize)
         return sum
       }, savedBytes)
-      setStatusText(`Done — ${ok} file(s) optimized, saved ${formatBytes(Math.max(0, saved))}`)
+
+      if (failed > 0 && ok === 0) {
+        setStatusText(`Failed — ${failed} file(s) errored. See logs for details.`)
+        setLogsOpen(true)
+      } else if (failed > 0) {
+        setStatusText(`Done — ${ok} optimized, ${failed} failed, saved ${formatBytes(Math.max(0, saved))}`)
+        setLogsOpen(true)
+      } else {
+        setStatusText(`Done — ${ok} file(s) optimized, saved ${formatBytes(Math.max(0, saved))}`)
+      }
+
       setOverallProgress(100)
       setEncoding(false)
     })
@@ -181,12 +206,22 @@ export default function App() {
     if (lastOutputPath) window.vidopti.revealInFolder(lastOutputPath)
   }, [lastOutputPath])
 
-  const showFooter = encoding || statusText.includes('Done') || statusText === 'Cancelled'
+  const showFooter = encoding || statusText.length > 0
   const hasOutput = queue.some(q => q.status === 'done')
+  const logErrorCount = logs.filter(l => l.level === 'error').length
+
+  const handleClearLogs = useCallback(async () => {
+    await window.vidopti.clearLogs()
+    setLogs([])
+  }, [])
 
   return (
     <div className="app">
-      <Header />
+      <Header
+        onToggleLogs={() => setLogsOpen(prev => !prev)}
+        logsOpen={logsOpen}
+        errorCount={logErrorCount}
+      />
       <div className="app__body">
         <main className="app__main">
           {queue.length === 0 ? (
@@ -218,6 +253,13 @@ export default function App() {
           <ProgressBar percent={overallProgress} label={`${Math.round(overallProgress)}%`} />
           <span className="app__status">{statusText}</span>
         </footer>
+      )}
+      {logsOpen && (
+        <LogPanel
+          entries={logs}
+          onClear={handleClearLogs}
+          onClose={() => setLogsOpen(false)}
+        />
       )}
     </div>
   )

@@ -55,6 +55,16 @@ export interface CustomOptions {
   crf: number
 }
 
+export type LogLevel = 'info' | 'warn' | 'error' | 'debug'
+
+export interface LogEntry {
+  id: string
+  timestamp: string
+  level: LogLevel
+  source: string
+  message: string
+}
+
 export interface VidOptiApi {
   getPathForFile: (file: File) => string
   openFiles: () => Promise<string[]>
@@ -70,6 +80,10 @@ export interface VidOptiApi {
     custom?: CustomOptions
   }) => Promise<EncodeFileResult[]>
   cancelEncode: () => Promise<void>
+  getLogs: () => Promise<LogEntry[]>
+  clearLogs: () => Promise<void>
+  getLogFilePath: () => Promise<string | null>
+  onLogEntry: (callback: (entry: LogEntry) => void) => () => void
   onEncodeProgress: (callback: (event: EncodeProgressEvent) => void) => () => void
   onEncodeFileStart: (callback: (data: { inputPath: string }) => void) => () => void
   onEncodeFileDone: (callback: (data: { inputPath: string; outputPath: string; outputSize: number }) => void) => () => void

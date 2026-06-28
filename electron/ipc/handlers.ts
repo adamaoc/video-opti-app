@@ -3,6 +3,7 @@ import path from 'node:path'
 import { probeVideo } from '../ffmpeg/probe'
 import { cancelEncode, encodeVideo } from '../ffmpeg/encode'
 import type { CustomOptions, PresetId } from '../ffmpeg/presets'
+import { logger, type LogEntry } from '../logger'
 import { settingsStore, type AppSettings } from '../store'
 
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi']
@@ -15,7 +16,19 @@ function getWindow(): BrowserWindow {
   return win
 }
 
+function broadcastLog(entry: LogEntry) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('log:entry', entry)
+  }
+}
+
 export function registerIpcHandlers(): void {
+  logger.subscribe(broadcastLog)
+
+  ipcMain.handle('log:get', () => logger.getEntries())
+  ipcMain.handle('log:clear', () => { logger.clear() })
+  ipcMain.handle('log:get-file-path', () => logger.getLogFilePath())
+
   ipcMain.handle('dialog:open-files', async () => {
     const result = await dialog.showOpenDialog(getWindow(), {
       properties: ['openFile', 'multiSelections'],
@@ -36,6 +49,7 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('video:probe-many', async (_, filePaths: string[]) => {
+    logger.info('probe', `Probing ${filePaths.length} file(s)`)
     const results = await Promise.allSettled(filePaths.map(probeVideo))
     return results.map((result, i) => ({
       path: filePaths[i],
@@ -70,6 +84,7 @@ export function registerIpcHandlers(): void {
   }) => {
     if (encoding) throw new Error('An encoding job is already running')
 
+    logger.info('encode', `Batch started — ${payload.files.length} file(s), preset: ${payload.presetId}`)
     encoding = true
     const outputDir = payload.outputDir ?? settingsStore.get('outputDir')
     const results: Array<{
@@ -125,6 +140,10 @@ export function registerIpcHandlers(): void {
         if (file && r.outputSize) return sum + Math.max(0, file.size - r.outputSize)
         return sum
       }, 0)
+
+    const okCount = results.filter(r => r.ok).length
+    const failCount = results.length - okCount
+    logger.info('encode', `Batch complete — ${okCount} succeeded, ${failCount} failed, saved ${savedBytes} bytes`)
 
     event.sender.send('encode:complete', {
       results,

@@ -71,6 +71,10 @@
 
 .queue__status--error {
   color: var(--error);
+  cursor: help;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
 }
 
 .queue__remove {

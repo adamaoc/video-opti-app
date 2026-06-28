@@ -38,7 +38,10 @@ export function QueueList({ items, onRemove, disabled }: QueueListProps) {
             <span className="mono">{formatResolution(item.width, item.height)}</span>
             <span className="mono">{formatBytes(item.size)}</span>
             <span className="mono">{formatDuration(item.duration)}</span>
-            <span className={`queue__status queue__status--${item.status}`}>
+            <span
+              className={`queue__status queue__status--${item.status}`}
+              title={item.error ?? undefined}
+            >
               {statusLabel(item)}
             </span>
             <button

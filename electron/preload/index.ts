@@ -36,6 +36,16 @@ export interface EncodeCompleteEvent {
   outputDir: string
 }
 
+export type LogLevel = 'info' | 'warn' | 'error' | 'debug'
+
+export interface LogEntry {
+  id: string
+  timestamp: string
+  level: LogLevel
+  source: string
+  message: string
+}
+
 const api = {
   getPathForFile: (file: File): string =>
     webUtils.getPathForFile(file),
@@ -68,6 +78,21 @@ const api = {
 
   cancelEncode: (): Promise<void> =>
     ipcRenderer.invoke('encode:cancel'),
+
+  getLogs: (): Promise<LogEntry[]> =>
+    ipcRenderer.invoke('log:get'),
+
+  clearLogs: (): Promise<void> =>
+    ipcRenderer.invoke('log:clear'),
+
+  getLogFilePath: (): Promise<string | null> =>
+    ipcRenderer.invoke('log:get-file-path'),
+
+  onLogEntry: (callback: (entry: LogEntry) => void) => {
+    const listener = (_: Electron.IpcRendererEvent, data: LogEntry) => callback(data)
+    ipcRenderer.on('log:entry', listener)
+    return () => ipcRenderer.off('log:entry', listener)
+  },
 
   onEncodeProgress: (callback: (event: EncodeProgressEvent) => void) => {
     const listener = (_: Electron.IpcRendererEvent, data: EncodeProgressEvent) => callback(data)
