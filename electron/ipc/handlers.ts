@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import path from 'node:path'
 import { probeVideo } from '../ffmpeg/probe'
 import { cancelEncode, encodeVideo } from '../ffmpeg/encode'
+import { cancelEditorMedia, prepareEditorMedia } from '../ffmpeg/editor'
 import {
   buildOutputBasename,
   ensureOutputDir,
@@ -67,6 +68,29 @@ export function registerIpcHandlers(): void {
     }))
   })
 
+  ipcMain.handle('video:prepare-editor-media', async (event, payload: {
+    requestId: string
+    path: string
+    duration: number
+    codec: string
+  }) => {
+    try {
+      return await prepareEditorMedia(payload.requestId, payload.path, payload.duration, payload.codec, progress => {
+        event.sender.send('editor-media:progress', progress)
+      })
+    } catch (err) {
+      const message = (err as Error).message
+      if (message !== 'Editor preview cancelled') {
+        logger.error('editor', `Preview failed (${path.basename(payload.path)}): ${message}`)
+      }
+      throw err
+    }
+  })
+
+  ipcMain.handle('video:cancel-editor-media', (_, requestId: string) => {
+    cancelEditorMedia(requestId)
+  })
+
   ipcMain.handle('settings:get', () => {
     return settingsStore.store
   })
@@ -83,7 +107,7 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('encode:start', async (event, payload: {
-    files: Array<{ path: string; duration: number; size: number }>
+    files: Array<{ path: string; duration: number; size: number; trimStart?: number; trimEnd?: number }>
     presetId: PresetId
     outputDir?: string | null
     useSequenceSuffix?: boolean
@@ -125,6 +149,8 @@ export function registerIpcHandlers(): void {
               presetId: payload.presetId,
               outputDir,
               outputBasename,
+              trimStart: file.trimStart,
+              trimEnd: file.trimEnd,
               custom: payload.custom,
             },
             file.duration,

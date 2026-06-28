@@ -14,6 +14,8 @@ export interface EncodeFileInput {
   path: string
   duration: number
   size: number
+  trimStart?: number
+  trimEnd?: number
 }
 
 export interface EncodeProgressEvent {
@@ -28,6 +30,19 @@ export interface EncodeFileResult {
   outputPath?: string
   outputSize?: number
   error?: string
+}
+
+export interface EditorMedia {
+  previewData: ArrayBuffer
+  thumbnails: string[]
+}
+
+export interface EditorMediaProgress {
+  requestId: string
+  inputPath: string
+  stage: 'thumbnails' | 'preview'
+  percent: number
+  message: string
 }
 
 export interface EncodeCompleteEvent {
@@ -58,6 +73,17 @@ const api = {
 
   probeMany: (paths: string[]): Promise<ProbeResult[]> =>
     ipcRenderer.invoke('video:probe-many', paths),
+
+  prepareEditorMedia: (payload: {
+    requestId: string
+    path: string
+    duration: number
+    codec: string
+  }): Promise<EditorMedia> =>
+    ipcRenderer.invoke('video:prepare-editor-media', payload),
+
+  cancelEditorMedia: (requestId: string): Promise<void> =>
+    ipcRenderer.invoke('video:cancel-editor-media', requestId),
 
   getSettings: (): Promise<AppSettings> =>
     ipcRenderer.invoke('settings:get'),
@@ -123,6 +149,12 @@ const api = {
     const listener = (_: Electron.IpcRendererEvent, data: EncodeCompleteEvent) => callback(data)
     ipcRenderer.on('encode:complete', listener)
     return () => ipcRenderer.off('encode:complete', listener)
+  },
+
+  onEditorMediaProgress: (callback: (event: EditorMediaProgress) => void) => {
+    const listener = (_: Electron.IpcRendererEvent, data: EditorMediaProgress) => callback(data)
+    ipcRenderer.on('editor-media:progress', listener)
+    return () => ipcRenderer.off('editor-media:progress', listener)
   },
 }
 

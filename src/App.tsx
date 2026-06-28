@@ -15,6 +15,7 @@ import { QueueList } from '@/components/QueueList'
 import { Sidebar } from '@/components/Sidebar'
 import { ProgressBar } from '@/components/ProgressBar'
 import { LogPanel } from '@/components/LogPanel'
+import { QuickEditor } from '@/components/QuickEditor'
 import './App.css'
 
 function makeId(): string {
@@ -34,6 +35,7 @@ export default function App() {
   const [lastOutputPath, setLastOutputPath] = useState<string | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [logsOpen, setLogsOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const batchPathsRef = useRef<string[]>([])
 
   const queuePaths = queue.map(q => q.path)
@@ -100,6 +102,26 @@ export default function App() {
 
   const handleRemove = useCallback((id: string) => {
     setQueue(prev => prev.filter(item => item.id !== id))
+  }, [])
+
+  const handleSaveTrim = useCallback((id: string, trimStart: number, trimEnd: number) => {
+    setQueue(prev => prev.map(item => {
+      if (item.id !== id) return item
+
+      const startsAtBeginning = trimStart <= 0.05
+      const endsAtFinish = Math.abs(trimEnd - item.duration) <= 0.05
+      return {
+        ...item,
+        trimStart: startsAtBeginning ? undefined : trimStart,
+        trimEnd: endsAtFinish ? undefined : trimEnd,
+        status: item.status === 'done' ? 'pending' : item.status,
+        progress: item.status === 'done' ? 0 : item.progress,
+        outputPath: item.status === 'done' ? undefined : item.outputPath,
+        outputSize: item.status === 'done' ? undefined : item.outputSize,
+      }
+    }))
+    setEditingId(null)
+    setStatusText('Trim saved')
   }, [])
 
   const handlePresetChange = useCallback((id: PresetId) => {
@@ -226,7 +248,13 @@ export default function App() {
 
     try {
       await window.vidopti.startEncode({
-        files: pending.map(p => ({ path: p.path, duration: p.duration, size: p.size })),
+        files: pending.map(p => ({
+          path: p.path,
+          duration: p.duration,
+          size: p.size,
+          trimStart: p.trimStart,
+          trimEnd: p.trimEnd,
+        })),
         presetId,
         outputDir,
         useSequenceSuffix,
@@ -264,6 +292,7 @@ export default function App() {
   const hasOutput = queue.some(q => q.status === 'done')
   const logErrorCount = logs.filter(l => l.level === 'error').length
   const canStart = !requiresOutputDir && queue.some(q => q.status === 'pending' || q.status === 'error')
+  const editingItem = editingId ? queue.find(item => item.id === editingId) ?? null : null
 
   const handleClearLogs = useCallback(async () => {
     await window.vidopti.clearLogs()
@@ -277,37 +306,54 @@ export default function App() {
         logsOpen={logsOpen}
         errorCount={logErrorCount}
       />
-      <div className="app__body">
-        <main className="app__main">
-          {queue.length === 0 ? (
-            <DropZone onFiles={addPaths} onBrowse={handleBrowse} disabled={encoding} />
-          ) : (
-            <QueueList items={queue} onRemove={handleRemove} disabled={encoding} />
-          )}
-        </main>
-        <Sidebar
-          presetId={presetId}
-          onPresetChange={handlePresetChange}
-          customMaxHeight={customMaxHeight}
-          customCrf={customCrf}
-          onCustomChange={handleCustomChange}
-          outputLabel={outputInfo.label}
-          outputWarning={outputInfo.warning}
-          useSequenceSuffix={useSequenceSuffix}
-          onSequenceSuffixChange={handleSequenceSuffixChange}
-          previewNames={previewNames}
-          onPickOutputDir={handlePickOutputDir}
-          onClearOutputDir={handleClearOutputDir}
-          onAddFiles={handleBrowse}
-          onStart={handleStart}
-          onCancel={handleCancel}
-          onReveal={handleReveal}
-          encoding={encoding}
-          canStart={canStart}
-          hasOutput={hasOutput}
-          hasManualOutputDir={!!outputDir}
-        />
-      </div>
+      {editingItem ? (
+        <div className="app__body">
+          <main className="app__main">
+            <QuickEditor
+              item={editingItem}
+              onCancel={() => setEditingId(null)}
+              onSave={handleSaveTrim}
+            />
+          </main>
+        </div>
+      ) : (
+        <div className="app__body">
+          <main className="app__main">
+            {queue.length === 0 ? (
+              <DropZone onFiles={addPaths} onBrowse={handleBrowse} disabled={encoding} />
+            ) : (
+              <QueueList
+                items={queue}
+                onEdit={setEditingId}
+                onRemove={handleRemove}
+                disabled={encoding}
+              />
+            )}
+          </main>
+          <Sidebar
+            presetId={presetId}
+            onPresetChange={handlePresetChange}
+            customMaxHeight={customMaxHeight}
+            customCrf={customCrf}
+            onCustomChange={handleCustomChange}
+            outputLabel={outputInfo.label}
+            outputWarning={outputInfo.warning}
+            useSequenceSuffix={useSequenceSuffix}
+            onSequenceSuffixChange={handleSequenceSuffixChange}
+            previewNames={previewNames}
+            onPickOutputDir={handlePickOutputDir}
+            onClearOutputDir={handleClearOutputDir}
+            onAddFiles={handleBrowse}
+            onStart={handleStart}
+            onCancel={handleCancel}
+            onReveal={handleReveal}
+            encoding={encoding}
+            canStart={canStart}
+            hasOutput={hasOutput}
+            hasManualOutputDir={!!outputDir}
+          />
+        </div>
+      )}
       {showFooter && (
         <footer className="app__footer">
           <ProgressBar percent={overallProgress} label={`${Math.round(overallProgress)}%`} />

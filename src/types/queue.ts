@@ -9,6 +9,8 @@ export interface QueueItem {
   width: number
   height: number
   codec: string
+  trimStart?: number
+  trimEnd?: number
   status: QueueStatus
   progress: number
   error?: string

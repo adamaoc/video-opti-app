@@ -28,7 +28,7 @@
 .queue__head,
 .queue__row {
   display: grid;
-  grid-template-columns: 1fr 90px 72px 64px 72px 32px;
+  grid-template-columns: 1fr 90px 72px 64px 90px 72px 86px;
   gap: 8px;
   align-items: center;
   padding: 0 14px;
@@ -61,6 +61,13 @@
   color: var(--text-secondary);
 }
 
+.queue__trim {
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .queue__status--processing {
   color: var(--accent-blue);
 }
@@ -77,6 +84,26 @@
   text-underline-offset: 3px;
 }
 
+.queue__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.queue__edit {
+  padding: 4px 7px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+}
+
+.queue__edit:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
 .queue__remove {
   color: var(--text-muted);
   font-size: 18px;
@@ -88,6 +115,7 @@
   color: var(--text-primary);
 }
 
+.queue__edit:disabled,
 .queue__remove:disabled {
   opacity: 0.3;
   cursor: not-allowed;

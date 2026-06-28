@@ -11,6 +11,8 @@ export interface EncodeJob {
   presetId: PresetId
   outputDir: string
   outputBasename: string
+  trimStart?: number
+  trimEnd?: number
   custom?: CustomOptions
 }
 
@@ -48,6 +50,10 @@ function parseTimeToSeconds(time: string): number {
   return 0
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
 export function encodeVideo(
   job: EncodeJob,
   duration: number,
@@ -57,10 +63,17 @@ export function encodeVideo(
   const outputPath = buildOutputPath(job.outputDir, job.outputBasename)
   const scaleFilter = buildScaleFilter(maxHeight)
   const ffmpegPath = getFfmpegPath()
+  const trimStart = clamp(job.trimStart ?? 0, 0, Math.max(0, duration - 0.01))
+  const trimEnd = job.trimEnd && job.trimEnd > trimStart
+    ? clamp(job.trimEnd, trimStart + 0.01, duration)
+    : duration
+  const outputDuration = Math.max(0.01, trimEnd - trimStart)
 
   const args = [
     '-y',
+    ...(trimStart > 0 ? ['-ss', String(trimStart)] : []),
     '-i', job.inputPath,
+    ...(trimEnd < duration ? ['-t', String(outputDuration)] : []),
     '-vf', scaleFilter,
     '-c:v', 'libx264',
     '-preset', 'medium',
@@ -88,8 +101,8 @@ export function encodeVideo(
         if (line.startsWith('out_time=')) {
           const timeStr = line.replace('out_time=', '').trim()
           const timeSeconds = parseTimeToSeconds(timeStr)
-          const percent = duration > 0
-            ? Math.min(100, (timeSeconds / duration) * 100)
+          const percent = outputDuration > 0
+            ? Math.min(100, (timeSeconds / outputDuration) * 100)
             : 0
           onProgress({ inputPath: job.inputPath, percent, timeSeconds })
         }
