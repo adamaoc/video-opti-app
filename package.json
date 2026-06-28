@@ -1,0 +1,63 @@
+{
+  "name": "video-opti-app",
+  "productName": "VidOpti",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local desktop app for compressing and resizing phone videos.",
+  "homepage": "https://github.com/adamaoc/video-opti-app#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adamaoc/video-opti-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/adamaoc/video-opti-app/issues"
+  },
+  "author": {
+    "name": "ampnet media",
+    "email": "hello@ampnet.media",
+    "url": "https://ampnet.media"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "dist-electron/main/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && electron-builder",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "electron-store": "^10.0.1",
+    "ffmpeg-static": "^5.2.0",
+    "ffprobe-static": "^3.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "electron": "^42.1.0",
+    "electron-builder": "^26.8.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vite-plugin-electron": "^1.0.1",
+    "vite-plugin-electron-renderer": "^1.0.0"
+  },
+  "build": {
+    "appId": "com.adamaoc.vidopti",
+    "productName": "VidOpti",
+    "asarUnpack": [
+      "**/node_modules/ffmpeg-static/**",
+      "**/node_modules/ffprobe-static/**"
+    ],
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "target": ["dmg", "zip"]
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.adamaoc.vidopti",
+  "productName": "VidOpti",
+  "asar": true,
+  "asarUnpack": [
+    "**/node_modules/ffmpeg-static/**",
+    "**/node_modules/ffprobe-static/**"
+  ],
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*"
+  ],
+  "mac": {
+    "category": "public.app-category.video",
+    "target": ["dmg", "zip"]
+  }
+}
